@@ -41,7 +41,9 @@ confirm() {
 execute_command() {
     case $1 in
         1)
-            echo "${GREEN_solid}\nChoose an option to change your DNS server:${NC}\c"
+            # Define colors
+            GREEN_solid="\033[1;32m"
+            NC="\033[0m"
 
             # Define an array of JSON strings
             dns_servers=(
@@ -58,17 +60,17 @@ execute_command() {
                 '{"number":11, "title":"Pars Online", "dns":"91.99.101.12"}'
                 '{"number":12, "title":"Pishgaman", "dns":"5.202.100.101"}'
                 '{"number":13, "title":"Resaneh Pardaz", "dns":"185.186.242.161"}'
-                '{"number":20, "title":"Cloudflare", "dns":"1.1.1.1 1.0.0.1"}'
-                '{"number":21, "title":"Open DNS", "dns":"208.67.222.222 208.67.220.220"}'
-                '{"number":22, "title":"Google", "dns":"8.8.8.8 8.8.4.4"}'
-                '{"number":23, "title":"Quad9", "dns":"9.9.9.9 149.112.112.112"}'
-                '{"number":24, "title":"PiHole", "dns":"192.168.100.27"}'
+                '{"number":20, "title":"Cloudflare", "dns":"1.1.1.1 1.0.0.1 2606:4700:4700::1111 2606:4700:4700::1001"}'
+                '{"number":21, "title":"Open DNS", "dns":"208.67.222.222 208.67.220.220 2620:119:35::35 2620:119:53::53"}'
+                '{"number":22, "title":"Google", "dns":"8.8.8.8 8.8.4.4 2001:4860:4860::8888 2001:4860:4860::8844"}'
+                '{"number":23, "title":"Quad9", "dns":"9.9.9.9 149.112.112.112 2620:fe::fe 2620:fe::9"}'
+                '{"number":24, "title":"PiHole", "dns":"192.168.100.27 fd5c:c307:7993:db00:2e0:4cff:fe6b:1f4"}'
                 '{"number":25, "title":"Some DNS", "dns":"91.239.100.100 89.233.43.71"}'
                 '{"number":26, "title":"CZ_NIC", "dns":"193.17.47.1 185.43.135.1"}'
                 '{"number":27, "title":"Level 3", "dns":"209.244.0.3 209.244.0.4"}'
                 '{"number":28, "title":"Comodo Group", "dns":"8.26.56.26 8.20.247.20"}'
-                '{"number":29, "title":"Control D", "dns":"76.76.2.0 76.76.10.0"}'
-                '{"number":30, "title":"Alternative", "dns":"76.76.19.19 76.223.122.150"}'
+                '{"number":29, "title":"Control D", "dns":"76.76.2.0 76.76.10.0 2606:1a40:: 2606:1a40:1::"}'
+                '{"number":30, "title":"Alternative", "dns":"76.76.19.19 76.223.122.150 2602:fcbc::ad 2602:fcbc:2::ad"}'
                 '{"number":31, "title":"Versign", "dns":"64.6.64.6 64.6.65.6"}'
                 '{"number":32, "title":"Open Nic", "dns":"216.87.84.211 23.90.4.6"}'
                 '{"number":33, "title":"Yandex", "dns":"77.88.8.8 77.88.8.1"}'
@@ -80,112 +82,102 @@ execute_command() {
                 '{"number":39, "title":"DYN", "dns":"216.146.35.35 216.146.36.36"}'
             )
 
-            printf "\n"
-            count=0
-            # Loop through the array and parse each JSON string
-            for dns_server in "${dns_servers[@]}"; do
-                # Increment count
-                ((count++))
+            # Function to print formatted options
+            print_options() {
+                local count=0
+                for dns_server in "${dns_servers[@]}"; do
+                    ((count++)) # Increment count
 
-                # Parse JSON string and extract fields
-                number=$(jq -r '.number' <<< "$dns_server")
-                title=$(jq -r '.title' <<< "$dns_server")
+                    # Parse JSON string and extract fields
+                    number=$(jq -r '.number' <<< "$dns_server")
+                    title=$(jq -r '.title' <<< "$dns_server")
 
-                # Output the fields with space between objects
-                printf "$number. $title"
+                    # Output the fields with space between objects
+                    printf "(%-2s) %-40s" "$number" "$title"
 
-                # Add newline every 5 items to break into a new row
-                if ((count % 3 == 0)); then
-                    printf "\n"
-                else
-                    printf "%-20s" "" # Add spacing between two items
-                fi
-
-            done
-
-            printf '0. Custom DNS           101. Reset DNS';
-            printf '\n\n Enter Number:';
- 
-
-
-            read dns_choose;
-
-            dns=$(jq -r '.dns' <<< "${dns_servers[$((dns_choose-1))]}")
-
-            printf 'Choose OS: \n
-            a. MacOS    b. Linux    c. Windows
-            \n Choose OS: ';
-
-            read os_choose;
-
-            if [ "$os_choose" == 'a' ]
-            then
-
-                # Custom
-                if [ "$dns_choose" -eq "0" ]; then
-                    printf 'Enter a desired DNS server: '
-                    read DNS;
-                    networksetup -setdnsservers Wi-Fi $DNS
-                fi
-
-                echo "[✓]${RED}Setup DNS...${NC}"
-
-
-                # Check if var is set and within range
-                if [[ -n $dns_choose && ${dns_servers[$dns_choose]+exists} ]]; then
-                    
-                    # Set DNS servers
-                    networksetup -setdnsservers Wi-Fi $dns
-                else
-                    echo "Invalid selection or var is not set."
-                fi
-
-                # Reset DNS
-                if [ "$dns_choose" -eq "101" ]; then
-                    echo "[✓]${RED}Removing${NC} these DNS servers:\n${CYAN}$(networksetup -getdnsservers Wi-Fi)${NC}"
-                    sleep 0.5
-                    networksetup -setdnsservers Wi-Fi empty
-                    echo "${RED}[!]${NC}DNS servers are reset to your DHCP."
-                    DNScheck
-                fi
-
-
-                echo "[✓]${GREEN}DNS Setup Done. ${NC}"
-
-            elif [ "$os_choose" == 'b' ]; then
-                                
-                # Update system software packages
-                sudo apt update
-
-                # Install resolvconf
-                sudo apt install resolvconf -y
-
-                # Start and enable resolvconf service
-                sudo systemctl start resolvconf.service
-                sudo systemctl enable resolvconf.service
-
-                # Clear resolv.conf.d/head
-                echo "" | sudo tee /etc/resolvconf/resolv.conf.d/head > /dev/null
-
-                # Loop through each DNS server and add as a separate nameserver entry
-                for ip in $dns; do
-                    sudo bash -c "echo \"nameserver $ip\" >> /etc/resolvconf/resolv.conf.d/head"
+                    # Add newline every 2 items to break into a new row
+                    if ((count % 2 == 0)); then
+                        printf "\n"
+                    else
+                        printf "%-1s" "" # Add spacing between two items
+                    fi
                 done
+            }
 
-                # Restart resolvconf and systemd-resolved services
-                sudo systemctl restart resolvconf.service
-                sudo systemctl restart systemd-resolved.service
-
-            elif [ "$os_choose" == 'c' ]; then
-                echo "Coming Soon..."
+            # Detect OS
+            if [[ "$(uname)" == "Darwin" ]]; then
+                # macOS
+                os="macos"
+            elif [[ "$(uname)" == "Linux" ]]; then
+                # Linux
+                os="linux"
             else
-                echo "No OS chosen!"
+                echo "Unsupported operating system."
+                exit 1
             fi
+
+            # Set DNS based on OS
+            case "$os" in
+                "macos")
+                    # macOS
+                    dns_command="networksetup -setdnsservers Wi-Fi"
+                    ;;
+                "linux")
+                    # Linux
+                    dns_command="sudo bash -c 'echo \"nameserver\" > /etc/resolvconf/resolv.conf.d/head'"
+                    # Ask the user whether to install resolvconf service
+                    read -p "Do you want to install resolvconf service? [y/N]: " install_resolvconf
+                    if [[ $install_resolvconf =~ ^[Yy]$ ]]; then
+                        sudo apt update
+                        sudo apt install resolvconf -y
+                        sudo systemctl start resolvconf.service
+                        sudo systemctl enable resolvconf.service
+                    fi
+                    ;;
+                *)
+                    echo "Unsupported operating system."
+                    exit 1
+                    ;;
+            esac
+
+            # Print options
+            echo -e "\n\n${GREEN_solid}Choose an option to change your DNS server:\n\n${NC}\c"
+            print_options
+
+            # Display custom and reset options
+            printf '\n\n(0) Custom DNS \n'
+            printf '(101) Reset DNS\n\n'
+
+            # Read selected number from terminal
+            read -p "Enter the number corresponding to your choice: " dns_choose
+
+            # Set DNS servers based on the selected number
+            if [ "$dns_choose" -eq "0" ]; then
+                read -p "Enter the desired DNS server: " custom_dns
+                dns="$custom_dns"
+            else
+                dns=$(jq -r '.dns' <<< "${dns_servers[$((dns_choose-1))]}")
+            fi
+
+            # Set DNS servers
+            $dns_command $dns
+
+            clear
+
+            # Reset DNS
+            if [ "$dns_choose" -eq "101" ]; then
+                # Reset DNS settings
+                echo "Resetting DNS..."
+                $dns_command empty
+                echo "DNS servers are reset."
+            fi
+
+            echo -e "\n\n${GREEN_solid}DNS Setup Done.\n${NC}\c"
 
             ;;
         2)
             echo "Running Installer aapanel"
-            wget -O install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh && sudo bash install.sh 93684c35
+            URL=https://www.aapanel.com/script/install_6.0_en.sh && if [ -f /usr/bin/curl ];then curl -ksSO "$URL" ;else wget --no-check-certificate -O install_6.0_en.sh "$URL";fi;bash install_6.0_en.sh aapanel
             echo "aapanel Successfully Installed"
             ;;
         3)
@@ -198,50 +190,50 @@ execute_command() {
             echo "Docker Successfully Installed"
             ;;
         4)
-            echo "Running Gitlab Runner Installer"
-        
+            echo "Running Gitlab Runner Installer On Ubuntu"
+
             # Download the binary for your system
             sudo curl -L --output /usr/local/bin/gitlab-runner https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64
-            
+
             # Give it permission to execute
             sudo chmod +x /usr/local/bin/gitlab-runner
-            
+
             # Create a GitLab Runner user
             sudo useradd --comment 'GitLab Runner' --create-home gitlab-runner --shell /bin/bash
-            
+
             # Install and run as a service
             sudo gitlab-runner install --user=gitlab-runner --working-directory=/home/gitlab-runner
             sudo gitlab-runner start
-            
+
             # Prompt for registration token
             read -p "Enter the GitLab Runner registration token: " registration_token
-            
+
             # Command to register runner
             sudo gitlab-runner register --url https://gitlab.com/ --registration-token "$registration_token"
-            
+
             # Permissions of gitlab-runner user
             sudo apt install acl
             sudo setfacl -R -m u:gitlab-runner:rwx /var/www
-            chown -R gitlab-runner /var/www
-            usermod -aG docker gitlab-runner
+            sudo chown -R gitlab-runner /var/www
+            sudo usermod -aG docker gitlab-runner
             sudo usermod -a -G sudo gitlab-runner
-            
+
             # Create SSH Key for gitlab-runner
-            su gitlab-runner
-            ssh-keygen -b 4096
-            cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-            cat ~/.ssh/id_rsa
-            cat ~/.ssh/id_rsa.pub
-            
-            # Copy id_rsa.pub and add to SSH keys on Gitlab 
-            
-            # Add Remote of SSH of Git 
-            ssh -T git@gitlab.com
-            
+            sudo -u gitlab-runner ssh-keygen -b 4096 -t rsa -N "" -f /home/gitlab-runner/.ssh/id_rsa
+            sudo -u gitlab-runner cat /home/gitlab-runner/.ssh/id_rsa.pub >> /home/gitlab-runner/.ssh/authorized_keys
+            sudo -u gitlab-runner cat /home/gitlab-runner/.ssh/id_rsa
+            sudo -u gitlab-runner cat /home/gitlab-runner/.ssh/id_rsa.pub
+
+            # Copy id_rsa.pub and add to SSH keys on Gitlab
+
+            # Add Remote of SSH of Git
+            sudo -u gitlab-runner ssh -T git@gitlab.com
+
             # Git Safe Directory
-            git config --global --add safe.directory '*'
-            
+            sudo -u gitlab-runner git config --global --add safe.directory '*'
+
             echo "Gitlab Runner Successfully Installed"
+
             ;;
         5)
             echo "Configuring SSH Server"
@@ -304,7 +296,9 @@ execute_command() {
             ;;
         7)
             echo "Optimizing Server Performance"
-        
+
+            echo "Comming Soon..."
+
             # # Adjust kernel parameters
             # sudo sysctl -w fs.file-max=100000
             # sudo sysctl -w vm.max_map_count=262144
@@ -354,6 +348,60 @@ execute_command() {
             sudo systemctl restart docker
         
             echo "Docker mirror changed and daemon reloaded."
+            ;;
+        10)
+            # Clean Logs of Ubuntu
+            echo "Cleaning Logs of Ubuntu..."
+
+            # Ask if user wants to truncate Docker logs
+            read -p "Do you want to truncate Docker logs? (Y/n): " docker_truncate_choice
+            docker_truncate_choice=${docker_truncate_choice:-Y}
+            if [ "${docker_truncate_choice^^}" = "Y" ]; then
+                # Truncate Docker logs
+                echo "Truncating Docker logs..."
+                truncate -s 0 /var/lib/docker/containers/**/*-json.log
+            fi
+
+            # Ask for cleaning unimportant Docker files
+            read -p "Do you want to clean other unimportant Docker files? (Y/n): " docker_clean_choice
+            docker_clean_choice=${docker_clean_choice:-Y}
+            if [ "${docker_clean_choice^^}" = "Y" ]; then
+                # Perform additional Docker cleanup steps here
+                echo "Performing Docker system prune -a..."
+                docker system prune -a -f
+            fi
+
+            # Vacuum logs and other system logs
+            read -p "Do you want to perform system logs vacuuming? (Y/n): " sys_logs_vacuum_choice
+            sys_logs_vacuum_choice=${sys_logs_vacuum_choice:-Y}
+            if [ "${sys_logs_vacuum_choice^^}" = "Y" ]; then
+                echo "Performing system logs vacuuming..."
+
+                # Rotate and compress system logs
+                logrotate -f /etc/logrotate.conf
+
+                # Clear systemd journal logs
+                journalctl --vacuum-time=1d
+            fi
+
+            # Remove old kernel versions
+            read -p "Do you want to remove old kernel versions? (Y/n): " kernel_cleanup_choice
+            kernel_cleanup_choice=${kernel_cleanup_choice:-Y}
+            if [ "${kernel_cleanup_choice^^}" = "Y" ]; then
+                echo "Removing old kernel versions..."
+                sudo apt autoremove --purge
+            fi
+
+            # Clean package cache
+            read -p "Do you want to clean package cache? (Y/n): " package_cache_cleanup_choice
+            package_cache_cleanup_choice=${package_cache_cleanup_choice:-Y}
+            if [ "${package_cache_cleanup_choice^^}" = "Y" ]; then
+                echo "Cleaning package cache..."
+                sudo apt clean
+            fi
+
+            echo "Log cleaning completed."
+
             ;;
         11)
             echo "Check Hard Disk Benchmark Ubuntu"
