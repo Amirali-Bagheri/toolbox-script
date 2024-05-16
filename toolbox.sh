@@ -47,10 +47,10 @@ execute_command() {
 
             # Define an array of JSON strings
             dns_servers=(
-                '{"number":1, "title":"Shecan", "dns":"178.22.122.100 185.51.200.2"}'
-                '{"number":2, "title":"403.online", "dns":"10.202.10.202 10.202.10.102"}'
-                '{"number":3, "title":"Electro", "dns":"78.157.42.100 78.157.42.101"}'
-                '{"number":4, "title":"Radar Game", "dns":"10.202.10.10 10.202.10.11"}'
+                '{"number":1, "title":"Shecan", "dns":"178.22.122.100 185.51.200.2", "priority":1}'
+                '{"number":2, "title":"403.online", "dns":"10.202.10.202 10.202.10.102", "priority":2}'
+                '{"number":3, "title":"Electro", "dns":"78.157.42.100 78.157.42.101", "priority":3}'
+                '{"number":4, "title":"Radar Game", "dns":"10.202.10.10 10.202.10.11", "priority":3}'
                 '{"number":5, "title":"Server.ir", "dns":"194.104.158.48 194.104.158.78"}'
                 '{"number":6, "title":"Host Iran", "dns":"172.29.0.100 172.29.2.100"}'
                 '{"number":7, "title":"DNSPro.ir", "dns":"185.105.236.236 185.105.238.238"}'
@@ -60,9 +60,9 @@ execute_command() {
                 '{"number":11, "title":"Pars Online", "dns":"91.99.101.12"}'
                 '{"number":12, "title":"Pishgaman", "dns":"5.202.100.101"}'
                 '{"number":13, "title":"Resaneh Pardaz", "dns":"185.186.242.161"}'
-                '{"number":20, "title":"Cloudflare", "dns":"1.1.1.1 1.0.0.1 2606:4700:4700::1111 2606:4700:4700::1001"}'
+                '{"number":20, "title":"Cloudflare", "dns":"1.1.1.1 1.0.0.1 2606:4700:4700::1111 2606:4700:4700::1001", "priority":5}'
                 '{"number":21, "title":"Open DNS", "dns":"208.67.222.222 208.67.220.220 2620:119:35::35 2620:119:53::53"}'
-                '{"number":22, "title":"Google", "dns":"8.8.8.8 8.8.4.4 2001:4860:4860::8888 2001:4860:4860::8844"}'
+                '{"number":22, "title":"Google", "dns":"8.8.8.8 8.8.4.4 2001:4860:4860::8888 2001:4860:4860::8844", "priority":6}'
                 '{"number":23, "title":"Quad9", "dns":"9.9.9.9 149.112.112.112 2620:fe::fe 2620:fe::9"}'
                 '{"number":24, "title":"PiHole", "dns":"192.168.100.27 fd5c:c307:7993:db00:2e0:4cff:fe6b:1f4"}'
                 '{"number":25, "title":"Some DNS", "dns":"91.239.100.100 89.233.43.71"}'
@@ -104,75 +104,282 @@ execute_command() {
                 done
             }
 
-            # Detect OS
-            if [[ "$(uname)" == "Darwin" ]]; then
-                # macOS
-                os="macos"
-            elif [[ "$(uname)" == "Linux" ]]; then
-                # Linux
-                os="linux"
-            else
-                echo "Unsupported operating system."
-                exit 1
-            fi
+            # Function to calculate average ping time for a given DNS server
+            get_average_ping() {
+                local dns=$1
 
-            # Set DNS based on OS
-            case "$os" in
-                "macos")
-                    # macOS
-                    dns_command="networksetup -setdnsservers Wi-Fi"
-                    ;;
-                "linux")
-                    # Linux
-                    dns_command="sudo bash -c 'echo \"nameserver\" > /etc/resolvconf/resolv.conf.d/head'"
-                    # Ask the user whether to install resolvconf service
-                    read -p "Do you want to install resolvconf service? [y/N]: " install_resolvconf
-                    if [[ $install_resolvconf =~ ^[Yy]$ ]]; then
-                        sudo apt update
-                        sudo apt install resolvconf -y
-                        sudo systemctl start resolvconf.service
-                        sudo systemctl enable resolvconf.service
-                    fi
-                    ;;
-                *)
+                avg=$(ping -c 4 -q "$dns" | tail -1 | awk '{print $4}' | cut -d '/' -f 2)
+                if [ -z "$avg" ]; then
+                    echo "9999"
+                else
+                    echo "$avg"
+                fi
+            }
+
+            # Function to detect the operating system
+            detect_os() {
+                if [[ "$(uname)" == "Darwin" ]]; then
+                    echo "macos"
+                elif [[ "$(uname)" == "Linux" ]]; then
+                    echo "linux"
+                elif [[ "$(uname)" =~ ^CYGWIN.*$ ]]; then
+                    echo "windows"
+                else
                     echo "Unsupported operating system."
                     exit 1
-                    ;;
-            esac
+                fi
+            }
 
-            # Print options
-            echo -e "\n\n${GREEN_solid}Choose an option to change your DNS server:\n\n${NC}\c"
-            print_options
+            # Function to set DNS based on the operating system
+            set_dns() {
+                local os=$1
+                local dns=$2  # Added dns variable
 
-            # Display custom and reset options
-            printf '\n\n(0) Custom DNS \n'
-            printf '(101) Reset DNS\n\n'
 
-            # Read selected number from terminal
-            read -p "Enter the number corresponding to your choice: " dns_choose
+                case "$os" in
+                    "macos")
+                        # macOS
+                        dns_command="networksetup -setdnsservers Wi-Fi"
+#                        networksetup -setdnsservers Wi-Fi "$dns"
+                        ;;
+                    "linux")
+                        # Linux
+                        dns_command="sudo bash -c 'echo \"nameserver $dns\" > /etc/resolv.conf'"
 
-            # Set DNS servers based on the selected number
-            if [ "$dns_choose" -eq "0" ]; then
-                read -p "Enter the desired DNS server: " custom_dns
-                dns="$custom_dns"
-            else
-                dns=$(jq -r '.dns' <<< "${dns_servers[$((dns_choose-1))]}")
-            fi
+                        # Ask the user whether to install resolvconf service
+                        read -p "Do you want to install resolvconf service? [y/N]: " install_resolvconf
+                        if [[ $install_resolvconf =~ ^[Yy]$ ]]; then
+                            sudo apt update
+                            sudo apt install resolvconf -y
+                            sudo systemctl start resolvconf.service
+                            sudo systemctl enable resolvconf.service
+                            dns_command="sudo bash -c 'echo \"nameserver $dns\" > /etc/resolvconf/resolv.conf.d/head'"
 
-            # Set DNS servers
-            $dns_command $dns
+                        fi
+                        ;;
+                    "windows")
+                        # Windows
+                        # Set DNS command for Windows here
+                        dns_command="netsh interface ip set dns \"Wi-Fi\" static $dns"
+                        ;;
+                    *)
+                        echo "Unsupported operating system."
+                        exit 1
+                        ;;
+                esac
 
-            clear
+                echo "Set DNS servers..."
 
-            # Reset DNS
-            if [ "$dns_choose" -eq "101" ]; then
+                # Set DNS servers
+                $dns_command $dns
+            }
+
+            # Prompt user for selection method
+            read -p "Choose a method to set DNS servers:
+            1) Find Best Server (Auto)
+            2) Show List (Manual)
+            3) Reset DNS
+            4) Check DNS
+
+            Enter your choice: " selection
+
+            # Detect the operating system
+            os=$(detect_os)
+
+            if [ "$selection" == "1" ]; then
+
+                clear
+
+                # Auto: Calculate ping for each server and select the best one
+                echo "Calculating ping for each server..."
+
+                # Filter DNS servers based on priority
+                filtered_dns_servers=()
+                for dns_server in "${dns_servers[@]}"; do
+                    priority=$(jq -r '.priority' <<< "$dns_server")
+                    if [ -n "$priority" ] && [ "$priority" != "null" ]; then
+                        filtered_dns_servers+=("$dns_server")
+                    fi
+                done
+
+                # Create an array to store ping values
+                pings=()
+
+                # Calculate ping for each server and display the name and ping
+                for dns_server in "${filtered_dns_servers[@]}"; do
+                    dns=$(jq -r '.dns' <<< "$dns_server")
+                    name=$(jq -r '.title' <<< "$dns_server")
+                    ping=$(get_average_ping "$dns")
+                    pings+=("$ping")  # Add ping value to pings array
+                    echo "$name, Ping: $ping ms"
+                done
+
+                # Find the index of the server with the lowest ping
+                lowest_ping_index=-1
+                min_ping=9999
+                for i in "${!pings[@]}"; do
+                    ping="${pings[$i]}"
+                    if [ "$ping" != "9999" ] && (( $(bc <<< "$ping < $min_ping") )); then
+                        min_ping=$ping
+                        lowest_ping_index=$i
+                    fi
+                done
+
+                # Set DNS server if a server with a valid ping is found
+                if [ "$lowest_ping_index" != "-1" ]; then
+                    best_dns=$(jq -r '.dns' <<< "${filtered_dns_servers[$lowest_ping_index]}")
+                    name=$(jq -r '.title' <<< "${filtered_dns_servers[$lowest_ping_index]}")
+                    echo "\n Setting DNS to $name \n"
+
+                    # Set DNS based on the operating system
+                    set_dns "$os" "$best_dns"
+
+                    exit
+                else
+                    echo "Failed to find the best server."
+                fi
+
+            elif [ "$selection" == "2" ]; then
+                # Manual: Show list of DNS servers for manual selection
+                echo -e "\n\n${GREEN_solid}Choose an option to change your DNS server:\n\n${NC}\c"
+                print_options
+
+                # Display custom and reset options
+                printf '\n\n(0) Custom DNS \n'
+
+                # Read selected number from terminal
+                read -p "Enter the number corresponding to your choice: " dns_choose
+
+                # Set DNS servers based on the selected number
+                if [ "$dns_choose" -eq "0" ]; then
+                    read -p "Enter the desired DNS server: " custom_dns
+                    dns="$custom_dns"
+                else
+                    dns=$(jq -r '.dns' <<< "${dns_servers[$((dns_choose-1))]}")
+                fi
+
+                # Detect the operating system
+                os=$(detect_os)
+
+                # Set DNS based on the operating system
+                set_dns "$os" "$dns"
+
+                echo "\n\n${GREEN_solid}DNS Setup Done.\n${NC}\c"
+
+                exit
+
+            elif [ "$selection" == "3" ]; then
+
+                # Function to reset DNS based on the operating system
+                reset_dns() {
+                    local os=$1
+
+                    case "$os" in
+                        "macos")
+                            # Reset DNS settings for macOS
+                            networksetup -setdnsservers Wi-Fi empty
+                            ;;
+                        "linux")
+                            # Reset DNS settings for Linux
+                            echo "nameserver" | sudo tee /etc/resolvconf/resolv.conf.d/head
+                            sudo resolvconf -u
+                            ;;
+                        "windows")
+                            # Reset DNS settings for Windows
+                            netsh interface ip set dns "Ethernet" dhcp
+                            ;;
+                        *)
+                            echo "Unsupported operating system."
+                            exit 1
+                            ;;
+                    esac
+                }
+
                 # Reset DNS settings
                 echo "Resetting DNS..."
-                $dns_command empty
-                echo "DNS servers are reset."
-            fi
 
-            echo -e "\n\n${GREEN_solid}DNS Setup Done.\n${NC}\c"
+                reset_dns "$os"
+
+                echo "DNS servers are reset."
+
+                exit
+
+            elif [ "$selection" == "4" ]; then
+
+                # Function to find the name of a DNS server by its IP address
+                find_dns_name() {
+                    local ip_address=$1
+
+                    for dns_server in "${dns_servers[@]}"; do
+                        dns=$(jq -r '.dns' <<< "$dns_server")
+                        name=$(jq -r '.title' <<< "$dns_server")
+
+                        # Split the DNS string into individual IP addresses
+                        IFS=' ' read -ra dns_ips <<< "$dns"
+
+                        # Check if the given IP address matches any of the DNS IPs
+                        for dns_ip in "${dns_ips[@]}"; do
+                            if [ "$dns_ip" == "$ip_address" ]; then
+                                echo "DNS Server Name: $name"
+                                return
+                            fi
+                        done
+                    done
+
+                    echo "DNS server with IP address $ip_address not found."
+                }
+
+                # Function to check DNS configuration and ping for each server
+                check_dns_and_ping() {
+                    local os=$1
+
+                    # Print current DNS settings
+                    case "$os" in
+                        "macos")
+                            echo "Current DNS servers:"
+                            networksetup -getdnsservers Wi-Fi
+                            ;;
+                        "linux")
+                            echo "Current DNS servers:"
+                            cat /etc/resolv.conf | grep nameserver
+                            ;;
+                        "windows")
+                            echo "Current DNS servers:"
+                            ipconfig /all | findstr "DNS Servers"
+                            ;;
+                        *)
+                            echo "Unsupported operating system."
+                            exit 1
+                            ;;
+                    esac
+
+                    # Get the DNS servers IP addresses
+                    case "$os" in
+                        "macos")
+                            dns_ips=($(networksetup -getdnsservers Wi-Fi | grep -Eo "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"))
+                            ;;
+                        "linux")
+                            dns_ips=($(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'))
+                            ;;
+                        "windows")
+                            dns_ips=($(ipconfig /all | findstr "DNS Servers" | sed 's/.*: //'))
+                            ;;
+                    esac
+
+                    # Find and print DNS server name for the first IP address
+                    find_dns_name "${dns_ips[0]}"
+
+                }
+
+                # Check DNS and ping
+                check_dns_and_ping "$os"
+
+                exit
+
+            else
+                echo "Invalid selection. Exiting..."
+                exit 1
+            fi
 
             ;;
         2)
